@@ -7,9 +7,11 @@ SIZE = 200
 MAXTIME = 300
 TFSF_POS = 50 # Index of electric field (included) from which total field starts
 INTERFACE = 100 # E-field index (inclusive) from where the new medium starts
-EPSILON_R = 9
+EPSILON_R = 1
 MU_R = 1
-LOSS = 0.01
+LOSS = 0.005 * sp.ones(SIZE - INTERFACE)
+LOSS *= sp.arange(SIZE - INTERFACE)
+print LOSS
 
 ez = sp.zeros(SIZE)
 hy = sp.zeros(SIZE)
