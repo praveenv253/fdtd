@@ -96,9 +96,9 @@ gridy = r * sin_theta
 # scale factors does not coincide with *any* field point, because the fields
 # are defined at points which are half-integral in at least one coordinate
 RI = 1
-h_nu = (r ** 2) / (RI * sin_theta * delta)
-h_phi = r * sin_theta
-h_mu = (r ** 3) / (RI * RI * delta)
+h_nu = sp.ones((SIZE_NU, SIZE_MU)) #(r ** 2) / (RI * sin_theta * delta)
+h_phi = sp.ones((SIZE_NU, SIZE_MU)) #r * sin_theta
+h_mu = sp.ones((SIZE_NU, SIZE_MU)) #(r ** 3) / (RI * RI * delta)
 
 ## Coefficients for update equations ##
 
@@ -116,7 +116,7 @@ cH_nu_H = sp.ones(H_nu.shape)
 # required for the phi dimension.
 H_nu_h_mu = (h_mu[:, 1:] + h_mu[:, :-1]) / 2
 H_nu_h_phi = (h_phi[:, 1:] + h_phi[:, :-1]) / 2
-cH_nu_E = - Sc_mu / (imp0 * MU_R * H_nu_h_phi * H_nu_h_mu)
+cH_nu_E = Sc_mu / (imp0 * MU_R * H_nu_h_phi * H_nu_h_mu)
 
 # Coefficients for the H_phi update
 cH_phi_H = sp.ones(H_phi.shape)
@@ -129,14 +129,14 @@ H_phi_h_mu = (  h_mu[1:, 1:] + h_mu[1:, :-1]
               + h_mu[:-1, 1:] + h_mu[:-1, :-1] ) / 4
 H_phi_h_nu_fwd_avg = (h_nu[1:, 1:] + h_nu[:-1, 1:]) / 2
 H_phi_h_nu_bwd_avg = (h_nu[1:, :-1] + h_nu[:-1, :-1]) / 2
-cH_phi_E = Sc_mu / (imp0 * MU_R * H_phi_h_nu * H_phi_h_mu)
+cH_phi_E = - Sc_mu / (imp0 * MU_R * H_phi_h_nu * H_phi_h_mu)
 
 # Coefficients for the H_mu update
 cH_mu_H = sp.ones(H_mu.shape)
 # Linear interpolation
 H_mu_h_nu = (h_nu[1:, :] + h_nu[:-1, :]) / 2
 H_mu_h_phi = (h_phi[1:, :] + h_phi[:-1, :]) / 2
-cH_mu_E_nu = - Sc_nu / (imp0 * MU_R * H_mu_h_nu * H_mu_h_phi)
+cH_mu_E_phi = - Sc_nu / (imp0 * MU_R * H_mu_h_nu * H_mu_h_phi)
 
 # Coefficients for the E_nu update
 cE_nu_E = sp.ones((E_nu[:, 1:-1]).shape)
@@ -149,7 +149,7 @@ E_nu_h_phi_fwd_avg = (  h_phi[1:, 2:] + h_phi[1:, 1:-1]
                       + h_phi[:-1, 2:] + h_phi[:-1, 1:-1] ) / 4
 E_nu_h_phi_bwd_avg = (  h_phi[1:, 1:-1] + h_phi[1:, :-2]
                       + h_phi[:-1, 1:-1] + h_phi[:-1, :-2] ) / 4
-cE_nu_H_phi = Sc_mu * imp0 / (EPSILON_R * E_nu_h_phi * E_nu_h_mu)
+cE_nu_H_phi = - Sc_mu * imp0 / (EPSILON_R * E_nu_h_phi * E_nu_h_mu)
 
 # Coefficients for the E_phi update
 cE_phi_E = sp.ones((E_phi[1:-1, 1:-1]).shape)
@@ -182,8 +182,8 @@ for t in range(MAXTIME):
                            - H_phi_h_nu_bwd_avg * E_nu[:, :-1] ) )
     
     # Update H-field, mu-component (del/delphi = 0)
-    H_mu = cH_mu_H * H_mu + cH_mu_E_nu * (  h_phi[1:, :] * E_phi[1:, :]
-                                          - h_phi[:-1, :] * E_phi[:-1, :] )
+    H_mu = cH_mu_H * H_mu + cH_mu_E_phi * (  h_phi[1:, :] * E_phi[1:, :]
+                                           - h_phi[:-1, :] * E_phi[:-1, :] )
     
     # Update E-field, nu-component (del/delphi = 0)
     E_nu[:, 1:-1] = (  cE_nu_E * E_nu[:, 1:-1]
@@ -204,16 +204,16 @@ for t in range(MAXTIME):
     #E_phi[SIZE_NU/2, SIZE_MU/2] = (1 - 2*arg) * sp.exp(-arg)
     
     ## Gaussian
-    #E_phi[SIZE_NU/2, SIZE_MU/2] = sp.exp(-(t-30) * (t-30) / 100.0)
+    E_phi[SIZE_NU/2, SIZE_MU/2] = sp.exp(-(t-30) * (t-30) / 100.0)
     
     # Sine wave
-    omega = 0.0001
-    E_phi[SIZE_NU/2 , SIZE_MU/2] = sp.cos(omega * t)
+    #omega = 0.0001
+    #E_phi[SIZE_NU/2 , SIZE_MU/2] = sp.cos(omega * t)
     
     ## Plotting ##
     
     if t % 5 == 0:
-        pl.contour(gridy, gridx, E_phi, 100)
+        pl.contour(E_phi, 100) #gridy, gridx, 
         #pl.pcolor(E_nu)
         pl.draw()
         pl.clf()
