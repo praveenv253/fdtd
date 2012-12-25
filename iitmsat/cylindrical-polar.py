@@ -40,8 +40,9 @@ muR = sp.ones((SIZE_R, SIZE_PHI))
 grid = sp.mgrid[0:SIZE_R, 0:SIZE_PHI]
 
 # Re-represent the grid values in cartesian coordinates
-r = grid[0]
-phi = grid[1]
+r = sp.array(grid[0], dtype=float)
+r[0, :] = 0.000001
+phi = 2 * grid[1]
 gridx = r * sp.cos(sp.pi * phi / 180)
 gridy = r * sp.sin(sp.pi * phi / 180)
 
@@ -129,7 +130,10 @@ for t in range(MAXTIME):
     ## Plotting ##
     
     if t % 5 == 0:
-        pl.contour(E_z, 100) #gridy, gridx, 
+        temp_E_z = sp.hstack((E_z, E_z[:, :1]))
+        temp_gridx = sp.hstack((gridx, sp.arange(SIZE_R).reshape((SIZE_R, 1))))
+        temp_gridy = sp.hstack((gridy, sp.zeros(SIZE_R).reshape((SIZE_R, 1))))
+        pl.contour(temp_gridx, temp_gridy, temp_E_z, 100)
         #pl.pcolor(E_z)
         pl.draw()
         pl.clf()
