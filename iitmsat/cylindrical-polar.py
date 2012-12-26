@@ -5,6 +5,8 @@
 2D simulation of gaussian source using cylindrical polar coordinates.
 """
 
+import sys
+
 import scipy as sp
 import matplotlib.pyplot as pl
 
@@ -91,7 +93,7 @@ cE_z_H_r = - delta_t / (E_z_epsR * delta_phi * E_z_h_r * E_z_h_phi)
 # Turn on interactive mode for animation
 pl.ion()
 
-for t in range(MAXTIME):
+for t in range(11, MAXTIME):
 
     ## Update equations ##
     
@@ -99,9 +101,13 @@ for t in range(MAXTIME):
     delta_E_z = E_z[:, 1:] - E_z[:, :-1]
     delta_E_z = sp.hstack((delta_E_z, (E_z[:, :1] - E_z[:, -1:])))
     H_r = cH_r_H * H_r + cH_r_E_z * delta_E_z
+    #sp.savetxt('output/time-step-%d-H_r.csv' % t, H_r[40:60, 80:100],
+    #           fmt='%10.4f', delimiter=','                            )
     
     # Update H-field, phi-componenet
     H_phi = cH_phi_H * H_phi + cH_phi_E_z * (E_z[1:, :] - E_z[:-1, :])
+    #sp.savetxt('output/time-step-%d-H_phi.csv' % t, H_phi[40:60, 80:100],
+    #           fmt='%10.4f', delimiter=','                                )
     
     # Update E-field, z-component
     #TODO: Use E_z_h_r_fwd_avg and E_z_h_r_bwd_avg
@@ -113,6 +119,8 @@ for t in range(MAXTIME):
                                     - E_z_h_phi_bwd_avg * H_phi[:-1, :] )
                     + cE_z_H_r * delta_H_r
                    )
+    #sp.savetxt('output/time-step-%d-E_z.csv' % t, E_z[40:60, 80:100],
+    #           fmt='%10.4f', delimiter=','                            )
     
     ## Hard source ##
     
@@ -121,7 +129,7 @@ for t in range(MAXTIME):
     #E_z[0, :] = (1 - 2*arg) * sp.exp(-arg)
     
     ## Gaussian
-    E_z[0, :] = sp.exp(-(t-30) * (t-30) / 100.0)
+    E_z[50, 90] = sp.exp(-(t-30) * (t-30) / 100.0)
     
     # Sine wave
     #omega = 0.0001
@@ -130,10 +138,29 @@ for t in range(MAXTIME):
     ## Plotting ##
     
     if t % 5 == 0:
-        temp_E_z = sp.hstack((E_z, E_z[:, :1]))
         temp_gridx = sp.hstack((gridx, sp.arange(SIZE_R).reshape((SIZE_R, 1))))
         temp_gridy = sp.hstack((gridy, sp.zeros(SIZE_R).reshape((SIZE_R, 1))))
+
+        pl.figure(0)
+        pl.clf()
+        temp_H_r = sp.hstack((H_r, H_r[:, :1]))
+        pl.contour(temp_gridx, temp_gridy, temp_H_r, 100)
+        #pl.pcolor(H_r)
+        pl.draw()
+
+        pl.figure(1)
+        pl.clf()
+        temp_H_phi = sp.hstack((H_phi, H_phi[:, :1]))
+        pl.contour(temp_gridx[1:, :], temp_gridy[1:, :], temp_H_phi, 100)
+        #pl.pcolor(H_r)
+        pl.draw()
+
+        pl.figure(2)
+        pl.clf()
+        temp_E_z = sp.hstack((E_z, E_z[:, :1]))
         pl.contour(temp_gridx, temp_gridy, temp_E_z, 100)
         #pl.pcolor(E_z)
         pl.draw()
-        pl.clf()
+    
+#    if t == 10:
+#        sys.exit(0)
