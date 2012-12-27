@@ -1,12 +1,16 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+"""
+2D simulation of a gaussian source using orthogonal dipole coordinates.
+"""
+
 import scipy as sp
 import matplotlib.pyplot as pl
 
 # Number of cells in each coordinate
-SIZE_NU = 11
-SIZE_MU = 101
+SIZE_NU = 100
+SIZE_MU = 100
 # Maximum number of iterations
 MAXTIME = 1000
 PPW = 20        # Points per wave of the ricker source
@@ -75,11 +79,11 @@ EPSILON_R = 1
 
 ## Grid for plotting ##
 
-grid = sp.mgrid[0:SIZE_NU, 0:SIZE_MU]
+grid = sp.mgrid[0.01:1.01:1j*SIZE_NU, 0.01:1.01:1j*SIZE_MU]
 
 # Re-represent the grid values in cartesian coordinates
-nu = 1 + grid[0]
-mu = 1 + grid[1]
+nu = grid[0]
+mu = grid[1]
 alpha = (256.0 * mu * mu) / (27 * (nu ** 4))
 beta = (1 + sp.sqrt(1 + alpha)) ** (2.0/3)
 gamma = alpha ** (1.0/3)
@@ -96,9 +100,9 @@ gridy = r * sin_theta
 # scale factors does not coincide with *any* field point, because the fields
 # are defined at points which are half-integral in at least one coordinate
 RI = 1
-h_nu = sp.ones((SIZE_NU, SIZE_MU)) #(r ** 2) / (RI * sin_theta * delta)
-h_phi = sp.ones((SIZE_NU, SIZE_MU)) #r * sin_theta
-h_mu = sp.ones((SIZE_NU, SIZE_MU)) #(r ** 3) / (RI * RI * delta)
+h_nu = (r ** 2) / (RI * sin_theta * delta)
+h_phi = r * sin_theta
+h_mu = (r ** 3) / (RI * RI * delta)
 
 ## Coefficients for update equations ##
 
@@ -204,7 +208,7 @@ for t in range(MAXTIME):
     #E_phi[SIZE_NU/2, SIZE_MU/2] = (1 - 2*arg) * sp.exp(-arg)
     
     ## Gaussian
-    E_phi[SIZE_NU/2, SIZE_MU/2] = sp.exp(-(t-30) * (t-30) / 100.0)
+    E_phi[50, 50] = sp.exp(-(t-30) * (t-30) / 100.0)
     
     # Sine wave
     #omega = 0.0001
@@ -213,7 +217,7 @@ for t in range(MAXTIME):
     ## Plotting ##
     
     if t % 5 == 0:
-        pl.contour(E_phi, 100) #gridy, gridx, 
-        #pl.pcolor(E_nu)
+        pl.contour(gridy, gridx, E_phi, 100)
+        #pl.pcolor(E_phi)
         pl.draw()
         pl.clf()
