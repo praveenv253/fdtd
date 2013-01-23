@@ -34,8 +34,10 @@ delta_t = 1
 
 ## Medium permittivity and permeability ##
 
-epsR = sp.ones((SIZE_R, SIZE_PHI))
-muR = sp.ones((SIZE_R, SIZE_PHI))
+EPSILON0 = 1 #8.854187817e-12
+MU0 = 1 #4 * sp.pi * 1e-7
+epsR = EPSILON0 * sp.ones((SIZE_R, SIZE_PHI))
+muR = MU0 * sp.ones((SIZE_R, SIZE_PHI))
 
 ## Grid for plotting ##
 
@@ -93,7 +95,7 @@ cE_z_H_r = - delta_t / (E_z_epsR * delta_phi * E_z_h_r * E_z_h_phi)
 # Turn on interactive mode for animation
 pl.ion()
 
-for t in range(11, MAXTIME):
+for t in range(1, MAXTIME):
 
     ## Update equations ##
     
@@ -102,12 +104,12 @@ for t in range(11, MAXTIME):
     delta_E_z = sp.hstack((delta_E_z, (E_z[:, :1] - E_z[:, -1:])))
     H_r = cH_r_H * H_r + cH_r_E_z * delta_E_z
     #sp.savetxt('output/time-step-%d-H_r.csv' % t, H_r[40:60, 80:100],
-    #           fmt='%10.4f', delimiter=','                            )
+    #           delimiter=','                                          )
     
     # Update H-field, phi-componenet
     H_phi = cH_phi_H * H_phi + cH_phi_E_z * (E_z[1:, :] - E_z[:-1, :])
     #sp.savetxt('output/time-step-%d-H_phi.csv' % t, H_phi[40:60, 80:100],
-    #           fmt='%10.4f', delimiter=','                                )
+    #           delimiter=','                                              )
     
     # Update E-field, z-component
     #TODO: Use E_z_h_r_fwd_avg and E_z_h_r_bwd_avg
@@ -120,7 +122,7 @@ for t in range(11, MAXTIME):
                     + cE_z_H_r * delta_H_r
                    )
     #sp.savetxt('output/time-step-%d-E_z.csv' % t, E_z[40:60, 80:100],
-    #           fmt='%10.4f', delimiter=','                            )
+    #           fmt='%.18e', delimiter=','                             )
     
     ## Hard source ##
     
@@ -129,7 +131,7 @@ for t in range(11, MAXTIME):
     #E_z[0, :] = (1 - 2*arg) * sp.exp(-arg)
     
     ## Gaussian
-    E_z[50, 90] = sp.exp(-(t-30) * (t-30) / 100.0)
+    E_z[50, 90] += sp.exp(-(t-30) * (t-30) / 100.0)
     
     # Sine wave
     #omega = 0.0001
@@ -140,7 +142,7 @@ for t in range(11, MAXTIME):
     if t % 5 == 0:
         temp_gridx = sp.hstack((gridx, sp.arange(SIZE_R).reshape((SIZE_R, 1))))
         temp_gridy = sp.hstack((gridy, sp.zeros(SIZE_R).reshape((SIZE_R, 1))))
-
+        
         pl.figure(0)
         pl.clf()
         temp_H_r = sp.hstack((H_r, H_r[:, :1]))
@@ -154,13 +156,14 @@ for t in range(11, MAXTIME):
         pl.contour(temp_gridx[1:, :], temp_gridy[1:, :], temp_H_phi, 100)
         #pl.pcolor(H_r)
         pl.draw()
-
+        
         pl.figure(2)
         pl.clf()
         temp_E_z = sp.hstack((E_z, E_z[:, :1]))
         pl.contour(temp_gridx, temp_gridy, temp_E_z, 100)
+        #pl.plot(range(len(E_z[:, 0])), E_z[:, 0])
         #pl.pcolor(E_z)
         pl.draw()
     
-#    if t == 10:
-#        sys.exit(0)
+    #if t == 100:
+    #    sys.exit(0)

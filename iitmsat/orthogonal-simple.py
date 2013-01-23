@@ -180,7 +180,7 @@ for t in range(MAXTIME):
     H_nu = cH_nu_H * H_nu + cH_nu_E * (  h_phi[:, 1:] * E_phi[:, 1:]
                                        - h_phi[:, :-1] * E_phi[:, :-1] )
     
-    # Update H-field, phi-componenet
+    # Update H-field, phi-component
     H_phi = (  cH_phi_H * H_phi
              + cH_phi_E * (  H_phi_h_nu_fwd_avg * E_nu[:, 1:]
                            - H_phi_h_nu_bwd_avg * E_nu[:, :-1] ) )
@@ -201,6 +201,7 @@ for t in range(MAXTIME):
                          + cE_phi_H_mu * ( E_phi_h_mu_fwd_avg * H_mu[1:, 1:-1]
                                           -E_phi_h_mu_bwd_avg * H_mu[:-1, 1:-1])
                         )
+
     ## Hard source ##
     
     # Ricker wavelet
