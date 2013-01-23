@@ -1,0 +1,30 @@
+Implementation Spec
+===================
+
+The program aims to implement a finite difference time domain program for a generalised non-orthogonal system of coordinates.
+In order to achieve this, the task has been broken down into simpler pieces, each of which will have its own detailed implementation spec.
+
+Steps
+-----
+
+1. Implement the orthogonal version of dipole coordinates in CUDA. (Python implementation is ready) Optimize this.
+2. Implement a generalised curvilinear coordinate (still orthogonal) system in CUDA. This will go from a 2D system to a 3D system
+3. Implement generalised non-orthogonal coordinates in python (as per the paper by Holland).
+4. Finally, implement the non-orthogonal case in CUDA.
+
+Implementation of dipole coordinate system in CUDA
+--------------------------------------------------
+
+- Declare nu and mu matrices                                | This should probably done via functions for h in terms of the coords in
+- Compute h_nu, h_mu and h_phi - store in constant memory?  | the generalised version
+(optimization mechanism is not clear - for a 1000x1000 array, you require 4MB of memory. There will be more than enough space on global memory, but not so in constant memory, which is limited to 64KB for devices of all compute capabilities (upto 3.5)
+Size of simulation area needs to be fixed)
+- Declare E and H matrices
+- Derive coefficient matrices in terms of h matrices
+(One possibility is to compute the coefficient matrices every time, since the processor is much faster than memory access and memory is limited)
+- Start stepping to update E and H
+(Update E and update H equations are separate kernels, in the same stream)
+
+=> Initial implementation can just involve plain memory access from global memory, without bothering about DRAM bursts and coalescing.
+   This will make for a good way to check base speed up on parallelization.
+

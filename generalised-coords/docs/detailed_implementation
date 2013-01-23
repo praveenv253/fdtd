@@ -1,0 +1,262 @@
+Detailed implementation spec (with code snippets)
+============================
+
+Dipole coordinate system in CUDA - no optimization; global memory access only
+-----------------------------------------------------------------------------
+
+- Define structure to be passed to kernel
+    struct Data data;
+- Declare nu and mu matrices
+    cudaMalloc((void **)&data.nu, SIZE_NU * SIZE_MU * sizeof(float));
+    cudaMalloc((void **)&data.mu, SIZE_NU * SIZE_MU * sizeof(float));
+- Declare r, theta matrices
+    cudaMalloc((void **)&data.r, SIZE_NU * SIZE_MU * sizeof(float));
+    cudaMalloc((void **)&data.theta, SIZE_NU * SIZE_MU * sizeof(float));
+- Initialize the nu and mu matrices - kernel for initialization
+    __global__ void 
+    init_nu_mu(int *nu_matrix, int *mu_matrix)
+    {
+        // Get thread position
+        int x = threadIdx.x + BlockIdx.x * BlockDim.x;
+        int y = threadIdx.y + BlockIdx.y * BlockDim.y;
+        
+        if(x < SIZE_NU && y < SIZE_MU)
+            nu_matrix[x * SIZE_MU + y] = x;
+            mu_matrix[x * SIZE_MU + y] = y;
+    }
+- Compute r, theta from nu, mu
+    __global__ void
+    compute_r_theta(int *nu_matrix, int *mu_matrix, float *r_matrix, 
+                    float *sin_theta_matrix)
+    {
+        // Get thread position
+        // ...
+        
+        if( ... ) { //limits
+            int nu = nu_matrix[x * SIZE_MU + y];
+            int mu = mu_matrix[x * SIZE_MU + y];
+            
+            // Note: nu and mu are just x and y. This obviates the need for the
+            // nu_matrix and mu_matrix
+            
+            // Find position to store r and theta
+            float *r = r_matrix + x*SIZE_MU + y
+            float *sin_theta = sin_theta_matrix + x*SIZE_MU + y
+            
+            // Invert nu-mu to r-theta
+            float alpha = (256.0 * mu * mu) / (27 * (nu * nu * nu * nu));
+            float beta = __powf((1 + _sqrt(1 + alpha)), (2.0/3));
+            float gamma = __powf(alpha, (1.0/3));
+            float zeta = __powf( ((beta*beta + beta*gamma + gamma*gamma) / beta), 1.5 ) / 2;
+            (*r) = 4 * zeta / (nu * (1 + zeta) * (1 + __powf(2*zeta - 1, 0.5)));
+            (*sin_theta) = __powf((*r) * nu, 0.5);
+            
+            // These may be needed for plotting. Decide what to do with them later.
+            // float delta = __powf( (4 - 3*(*sin_theta)*(*sin_theta)), 0.5 );
+            // float gridx = (*r) * __powf(1 - (*sin_theta)*(*sin_theta), 0.5);
+            // float gridy = (*r) * sin_theta;
+        }
+    }
+- Compute h_nu, h_mu and h_phi
+    // In the computation of the h-matrices, the existing matrices can be 
+    // overwritten. Beyond this point, only the h-matrices are actually used.
+    __global__ void
+    compute_h(float *h_nu_matrix, float *h_phi_matrix, float *h_mu_matrix, 
+              float *r_matrix, float *sin_theta_matrix)
+    {
+        // Initial bit
+        // ...
+        
+        float *h_nu = h_nu_matrix + x*SIZE_MU + y;
+        float r = r_matrix[x*SIZE_MU + y];
+        // Similarly for the rest
+        
+        float delta = __powf( (4 - 3*sin_theta*sin_theta), 0.5 );
+        
+        // Assume RI is #defined somewhere.
+        (*h_nu) = (r * r) / (RI * sin_theta * delta);
+        (*h_phi) = r * sin_theta;
+        (*h_mu) = (r * r * r) / (RI * RI * delta);
+    }
+    // Note: 64KB of const memory => 64K/3 ~ 21K => 5461 elements per h-matrix => matrix side length = 73 => abysmal
+    // That is, 64KB allows only a maximum simulation size of 73x73.
+    // And this is excluding epsilon and mu matrices which will also come into the mix later on.
+- Declare E and H matrices
+    // host versions of the field matrices
+    float E_nu[SIZE_NU-1][SIZE_MU];
+    float E_phi[SIZE_NU][SIZE_MU];
+    // E_mu is zero
+    
+    float H_nu[SIZE_NU][SIZE_MU-1];
+    float H_phi[SIZE_NU-1][SIZE_MU-1];
+    float H_mu[SIZE_NU-1][SIZE_MU];
+    
+    // Device versions of field matrices - inside the data struct
+    float *dev_E_nu, *dev_E_phi, *dev_H_nu, *dev_H_phi, *dev_H_mu;
+    cudaMalloc((void **)&dev_E, SIZE_NU * SIZE_MU * sizeof(float));
+    // And so on...
+- Copy pointers to device
+    __device__ struct Data *d;
+    // one-time minor expense for increased ease of access...
+    cudaMemcpy(d, &data, sizeof(data), cudaMemcpyHostToDevice);
+- Derive coefficient matrices in terms of h matrices
+    // This is done in the kernel itself
+- Start stepping to update E and H
+Note: Maybe we should compute the h-matrices also every single time. In all probability, considering that memory access can take upto 500 clock cycles, computing h-values each time might be faster - only benchmarking will tell
+    // Each update equation occurs as a separate kernel.
+    
+    // Update for H_nu
+    __global__ void
+    update_H_nu(struct Data *d) {
+        // Get x and y; check limits
+        
+        // Compute coefficients
+        int index = x*SIZE_MU + y;
+        float cH = 1;
+        float h_phi_prev = d->h_phi[index];
+        float h_phi_next = d->h_phi[index + 1];
+        float h_phi_avg = (h_phi_prev + h_phi_next) / 2;
+        float h_mu_avg = (d->h_mu[index] + d->h_mu[index + 1]) / 2;
+        // Sc_mu and imp0 should be __device__ const float somewhere
+        // MU_R is #defined somewhere
+        float cE = Sc_mu / (imp0 * MU_R * h_phi_avg * h_mu_avg);
+        
+        // Now for the actual update
+        float *H_nu = d->H_nu + index;
+        float E_phi_prev = d->E_phi[index];
+        float E_phi_next = d->E_phi[index + 1];
+        (*H_nu) = cH * (*H_nu) + cE * (h_phi_next * E_phi_next - h_phi_prev * E_phi_prev);
+    }
+    
+    // Update for H_phi
+    __global__ void
+    update_H_phi(struct Data *d) {
+        // Get x and y; check limits - note that limits vary from matrix to matrix
+        
+        // Compute coefficients
+        float index = x*SIZE_MU + y;
+        float cH = 1;
+        float h_nu = (  d->h_nu[index] + d->h_nu[index + SIZE_MU + 1]
+                      + d->h_nu[index + 1] + d->h_nu[index + SIZE_MU] ) / 4;
+        float h_mu = (  d->h_mu[index] + d->h_mu[index + SIZE_MU + 1]
+                      + d->h_mu[index + 1] + d->h_mu[index + SIZE_MU] ) / 4;
+        float h_nu_fwd_avg = (h_nu[index + SIZE_MU + 1] + h_nu[index + 1]) / 2;
+        float h_nu_bwd_avg = (h_nu[index] + h_nu[index + SIZE_MU]) / 2;
+        cE = - Sc_mu / (imp0 * MU_R * h_nu * h_mu);
+
+        // Final update equation
+        float *H_phi = d->H_phi + index;
+        float E_nu_fwd = d->E_nu[index + 1];
+        float E_nu_bwd = d->E_nu[index];
+        (*H_phi) = cH * (*H_phi) + cE * (h_nu_fwd_avg * E_nu_fwd - h_nu_bwd_avg * E_nu_bwd);
+    }
+    
+    // Update for H_mu
+    __global__ void
+    update_H_mu(struct Data *d) {
+        // Get x and y; check limits - note that limits vary from matrix to matrix
+        
+        // Compute coefficients
+        float index = x*SIZE_MU + y;
+        float cH = 1;
+        float h_nu_avg = (d->h_nu[index] + d->h_nu[index + SIZE_MU]) / 2;
+        float h_phi_prev = d->h_phi[index];
+        float h_phi_next = d->h_phi[index + SIZE_MU];
+        float h_phi_avg = (h_phi_prev + h_phi_next) / 2;
+        // Sc_nu also has to be __device__ const float somewhere.
+        cE = - Sc_nu / (imp0 * MU_R * h_nu_avg * h_phi_avg);
+        
+        // Final update equation
+        float *H_mu = d->H_mu + index;
+        float E_phi_prev = d->E_phi[index];
+        float E_phi_next = d->E_phi[index + SIZE_MU];
+        (*H_mu) = cH * (*H_mu) + cE * (h_phi_next * E_phi_next - h_phi_prev * E_phi_prev);
+    }
+    
+    // Update for E_nu
+    __global__ void
+    update_E_nu(struct Data *d) {
+        // Get x and y; check limits - note that limits vary from matrix to matrix
+        
+        // Compute coefficients
+        float index = x*SIZE_MU + y;
+        float cE = 1;
+        float h_phi_avg = (d->h_phi[index] + d->h_phi[index + SIZE_MU]) / 2;
+        float h_mu_avg = (d->h_mu[index] + d->h_mu[index + SIZE_MU]) / 2;
+        float h_phi_fwd_avg = (  d->h_phi[index] + d->h_phi[index + SIZE_MU + 1]
+                               + d->h_phi[index + SIZE_MU] + d->h_phi[index + 1] ) / 4;
+        float h_phi_bwd_avg = (  d->h_phi[index] + d->h_phi[index + SIZE_MU - 1]
+                               + d->h_phi[index + SIZE_MU] + d->h_phi[index - 1] ) / 4;
+        // EPSILON_R to be #defined somewhere
+        float cH = - Sc_mu * imp0 / (EPSILON_R * h_phi_avg * h_mu_avg);
+        
+        // Final update equation
+        float *E_nu = d->E_nu + index;
+        float H_phi_next = d->H_phi[index];
+        float H_phi_prev = d->H_phi[index - 1];
+        (*E_nu) = cE * (*E_nu) + cH * (h_phi_fwd_avg * H_phi_next - h_phi_bwd_avg * H_phi_prev);
+    }
+    
+    // Update for E_phi
+    __global__ void
+    update_E_phi(struct Data *d, int t) {
+        // Get x and y; check limits - note that limits vary from matrix to matrix
+        
+        // Compute coefficients
+        float index = x*SIZE_MU + y;
+        float cE = 1;
+        float h_nu = d->h_nu[index];
+        float h_mu = d->h_mu[index];
+        float h_nu_fwd_avg = (d->h_nu[index + 1] + h_nu) / 2;
+        float h_nu_bwd_avg = (h_nu + d->h_nu[index - 1]) / 2;
+        float h_mu_fwd_avg = (d->h_mu[index + SIZE_MU] + h_mu) / 2;
+        float h_mu_bwd_avg = (h_mu + d->h_mu[index - SIZE_MU]) / 2;
+        float cH_nu = Sc_mu * imp0 / (EPSILON_R * h_nu * h_mu);
+        float cH_mu = - Sc_nu * imp0 / (EPSILON_R * h_nu * h_mu);
+        
+        // Final update equation
+        float *E_phi = d->E_phi + index;
+        float H_nu_next = d->H_nu[index];
+        float H_nu_prev = d->H_nu[index - 1];
+        float H_mu_next = d->H_mu[index];
+        float H_mu_prev = d->H_mu[index - SIZE_MU];
+        (*E_phi) =   cE * (*E_phi)
+                   + cE_phi_H_nu * (h_nu_fwd_avg * H_nu_next - h_nu_bwd_avg * H_nu_prev)
+                   + cE_phi_H_mu * (h_mu_fwd_avg * H_mu_next - h_mu_bwd_avg * H_mu_prev);
+        
+        // Needs definition of SOURCE_LOCATION
+        E_phi[SOURCE_LOCATION] = __expf(-(t-30) * (t-30) / 100.0);
+    }
+- Limits of x and y in each update kernel
+    // H_nu is a SIZE_NU x (SIZE_MU-1) matrix, all elements are computed
+    if(x >= SIZE_NU || y >= SIZE_MU-1) return;
+    // H_phi is a (SIZE_NU-1) x (SIZE_MU-1) matrix, all elements are computed
+    if(x >= SIZE_NU-1 || y >= SIZE_MU-1) return;
+    // H_mu is a (SIZE_NU-1) x SIZE_MU matrix, all elements are computed
+    if(x >= SIZE_NU-1 || y >= SIZE_MU) return;
+    // E_nu is a (SIZE_NU-1) x SIZE_MU matrix, the topmost and bottom-most
+    // elements are not computed.
+    if(x >= SIZE_NU-1 || y == 0 || y >= SIZE_MU-1) return;
+    // E_phi is a SIZE_NU x SIZE_MU matrix, one cell on all sides is left
+    // un-computed
+    if(x == 0 || x >= SIZE_NU-1 || y == 0 || y >= SIZE_MU-1) return;
+- Insert source
+    // Source is in the E_phi direction, added in the E_phi update equation
+- Capture information by copying field matrices back into CPU memory.
+    if(t % 5 == 0) {
+        // Fetch from GPU
+        cudaMemcpy(E_nu, data.E_nu, SIZE_NU * SIZE_MU * sizeof(float), cudaMemcpyDeviceToHost);
+        
+        // Write into file
+        fstream f;
+        char filename[50];
+        sprintf(filename, "output-timestep%d", t);
+        f.open(filename, std::fstream::out);
+        f<<SIZE_NU<<endl<<SIZE_MU<<endl;
+        for(int i=0 ; i < SIZE_NU ; i++) {
+            for(int j=0 ; j < SIZE_MU ; j++ ) {
+                f<<E_nu[i]<<endl;
+            }
+        }
+        f.close();
+    }
