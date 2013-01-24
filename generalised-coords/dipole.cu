@@ -212,8 +212,10 @@ update_E_nu(struct Data *d) {
     
     // Final update equation
     float *E_nu = d->E_nu + index;
-    float H_phi_next = d->H_phi[index];
-    float H_phi_prev = d->H_phi[index - 1];
+    // Note: Column width of H_phi is only SIZE_MU-1. Need to use appropriate
+    // column sizes for each matrix
+    float H_phi_next = d->H_phi[x*(SIZE_MU-1) + y];
+    float H_phi_prev = d->H_phi[x*(SIZE_MU-1) + y - 1];
     (*E_nu) = cE * (*E_nu) + cH * (  h_phi_fwd_avg * H_phi_next
                                    - h_phi_bwd_avg * H_phi_prev );
 }
@@ -241,8 +243,9 @@ update_E_phi(struct Data *d, int t) {
     
     // Final update equation
     float *E_phi = d->E_phi + index;
-    float H_nu_next = d->H_nu[index];
-    float H_nu_prev = d->H_nu[index - 1];
+    // Need to use appropriate column sizes for each matrix
+    float H_nu_next = d->H_nu[x*(SIZE_MU-1) + y];
+    float H_nu_prev = d->H_nu[x*(SIZE_MU-1) + y - 1];
     float H_mu_next = d->H_mu[index];
     float H_mu_prev = d->H_mu[index - SIZE_MU];
     (*E_phi) =   cE * (*E_phi)
@@ -250,7 +253,8 @@ update_E_phi(struct Data *d, int t) {
                + cH_mu * (h_mu_fwd_avg * H_mu_next - h_mu_bwd_avg * H_mu_prev);
 
     // Needs definition of SOURCE_LOCATION
-    E_phi[SOURCE_LOCATION] = __expf(-(t-30) * (t-30) / 100.0);
+    if(index == SOURCE_LOCATION)
+        E_phi[index] = __expf(-(t-30) * (t-30) / 100.0);
 }
 
 int main(int argc, char **argv)
@@ -315,7 +319,7 @@ int main(int argc, char **argv)
                cudaMemcpyHostToDevice);
     cudaMemcpy(data.E_phi, E_phi, SIZE_NU * SIZE_MU * sizeof(float),
                cudaMemcpyHostToDevice);
-    cudaMemcpy(data.H_nu, H_nu, SIZE_NU-1 * (SIZE_MU-1) * sizeof(float),
+    cudaMemcpy(data.H_nu, H_nu, SIZE_NU * (SIZE_MU-1) * sizeof(float),
                cudaMemcpyHostToDevice);
     cudaMemcpy(data.H_phi, H_phi, (SIZE_NU-1) * (SIZE_MU-1) * sizeof(float),
                cudaMemcpyHostToDevice);
