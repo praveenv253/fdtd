@@ -28,6 +28,7 @@ while(1):
         f = open(filename)
     except IOError:
         print 'No more files'
+        break
     print filename
     line_number = 1
     m = None
