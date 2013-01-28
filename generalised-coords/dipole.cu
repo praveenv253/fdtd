@@ -4,8 +4,8 @@
 #include <iostream>
 #include <fstream>
 
-#define Sc_nu 0.2f
-#define Sc_mu 0.2f
+#define Sc_nu 0.1f
+#define Sc_mu 0.1f
 #define imp0 377.0f
 #define EPSILON_R 1
 #define MU_R 1
@@ -13,8 +13,12 @@
 // These are currently fixed, but they should be user-modifiable
 const int SIZE_NU = 128;
 const int SIZE_MU = 128;
-const int MAXTIME = 1000;
-const int SOURCE_LOCATION = (SIZE_NU/2) * SIZE_MU + (SIZE_MU/2);
+const float NU_MAX = 1.0;
+const float NU_MIN = NU_MAX / SIZE_NU;
+const float MU_MAX = 1.0;
+const float MU_MIN = MU_MAX / SIZE_MU;
+const int MAXTIME = 100;
+const int SOURCE_LOCATION = (SIZE_NU/2) * SIZE_MU + (SIZE_MU/3);
 const int RI = 1;
 
 // Define structure to be passed to kernel
@@ -41,8 +45,8 @@ compute_r_theta(float *r_matrix, float *sin_theta_matrix)
     int y = threadIdx.y + blockIdx.y * blockDim.y;
     
     if(x < SIZE_NU && y < SIZE_MU) {
-        int nu = x;
-        int mu = y;
+        float nu = NU_MIN + x * (NU_MAX - NU_MIN) / SIZE_NU;
+        float mu = MU_MIN + y * (MU_MAX - MU_MIN) / SIZE_MU;
         
         // Note: nu and mu are just x and y. This obviates the need for the
         // nu_matrix and mu_matrix
@@ -296,12 +300,12 @@ int main(int argc, char **argv)
     // Declare host versions of E and H matrices
     // Might want to use HostAlloc later on so that copying to this can be made
     // asynchronous
-    float E_nu[SIZE_NU-1][SIZE_MU] = { 0.0f };
-    float E_phi[SIZE_NU][SIZE_MU] = { 0.0f };
+    float E_nu[SIZE_NU-1][SIZE_MU] = { 0 };
+    float E_phi[SIZE_NU][SIZE_MU] = { 0 };
     // E_mu is zero
-    float H_nu[SIZE_NU][SIZE_MU-1] = { 0.0f };
-    float H_phi[SIZE_NU-1][SIZE_MU-1] = { 0.0f };
-    float H_mu[SIZE_NU-1][SIZE_MU] = { 0.0f };
+    float H_nu[SIZE_NU][SIZE_MU-1] = { 0 };
+    float H_phi[SIZE_NU-1][SIZE_MU-1] = { 0 };
+    float H_mu[SIZE_NU-1][SIZE_MU] = { 0 };
     
     std::cout<<"Created host field matrices\n";
      
@@ -369,8 +373,9 @@ int main(int argc, char **argv)
         // requirement will help a lot. Benchmarking will tell us what the
         // highest possible frequency with zero lag will be.
         
-        if(t % 5 == 0) {
+        if(t % 1 == 0) {
             // Fetch from GPU
+            // This memcpy _should_ be synchronous...
             cudaMemcpy(E_phi, data.E_phi, SIZE_NU * SIZE_MU * sizeof(float), 
                        cudaMemcpyDeviceToHost);
             
