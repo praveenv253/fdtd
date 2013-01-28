@@ -9,8 +9,8 @@ import scipy as sp
 import matplotlib.pyplot as pl
 
 # Number of cells in each coordinate
-SIZE_NU = 100
-SIZE_MU = 100
+SIZE_NU = 128
+SIZE_MU = 128
 # Maximum number of iterations
 MAXTIME = 1000
 PPW = 20        # Points per wave of the ricker source
@@ -79,7 +79,7 @@ EPSILON_R = 1
 
 ## Grid for plotting ##
 
-grid = sp.mgrid[0.01:1.01:1j*SIZE_NU, 0.01:1.01:1j*SIZE_MU]
+grid = sp.mgrid[(1.0/SIZE_NU):1.0:1j*SIZE_NU, (1.0/SIZE_MU):1.0:1j*SIZE_MU]
 
 # Re-represent the grid values in cartesian coordinates
 nu = grid[0]
