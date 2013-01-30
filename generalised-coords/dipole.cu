@@ -10,6 +10,16 @@
 #define EPSILON_R 1
 #define MU_R 1
 
+static void
+check_error(cudaError_t err, const char *file, int line) {
+    if(err != cudaSuccess) {
+        std::cout<<cudaGetErrorString(err)<<" in "<<file;
+        std::cout<<" at line "<<line<<"\n";
+        exit(EXIT_FAILURE);
+    }
+}
+#define _(err) (check_error(err, __FILE__, __LINE__))
+
 // These are currently fixed, but they should be user-modifiable
 const int SIZE_NU = 128;
 const int SIZE_MU = 128;
@@ -267,15 +277,14 @@ int main(int argc, char **argv)
     
     std::cout<<"Program started\n";
     
-    // TODO: Error handling!
     // Declare r, theta matrices
-    cudaMalloc((void **)&data.r, SIZE_NU * SIZE_MU * sizeof(float));
-    cudaMalloc((void **)&data.sin_theta, SIZE_NU * SIZE_MU * sizeof(float));
+    _(cudaMalloc((void **)&data.r, SIZE_NU * SIZE_MU * sizeof(float)));
+    _(cudaMalloc((void **)&data.sin_theta, SIZE_NU * SIZE_MU * sizeof(float)));
     
     std::cout<<"Allocated memory for r and theta matrices\n";
     
     cudaStream_t stream1;
-    cudaStreamCreate(&stream1);
+    _(cudaStreamCreate(&stream1));
     
     // Launch kernel to compute r and theta
     dim3 threads(16, 16);
@@ -285,9 +294,9 @@ int main(int argc, char **argv)
     std::cout<<"Done computing r and theta\n";
     
     // Allocate memory for h-matrices
-    cudaMalloc((void **)&data.h_nu, SIZE_NU * SIZE_MU * sizeof(float));
-    cudaMalloc((void **)&data.h_phi, SIZE_NU * SIZE_MU * sizeof(float));
-    cudaMalloc((void **)&data.h_mu, SIZE_NU * SIZE_MU * sizeof(float));
+    _(cudaMalloc((void **)&data.h_nu, SIZE_NU * SIZE_MU * sizeof(float)));
+    _(cudaMalloc((void **)&data.h_phi, SIZE_NU * SIZE_MU * sizeof(float)));
+    _(cudaMalloc((void **)&data.h_mu, SIZE_NU * SIZE_MU * sizeof(float)));
     
     std::cout<<"Allocated memory for h-matrices\n";
     
@@ -310,32 +319,33 @@ int main(int argc, char **argv)
     std::cout<<"Created host field matrices\n";
      
     // Allocate memory on the device for field matrices
-    cudaMalloc((void **)&data.E_nu, (SIZE_NU-1) * SIZE_MU * sizeof(float));
-    cudaMalloc((void **)&data.E_phi, SIZE_NU * SIZE_MU * sizeof(float));
-    cudaMalloc((void **)&data.H_nu, SIZE_NU * (SIZE_MU-1) * sizeof(float));
-    cudaMalloc((void **)&data.H_phi, (SIZE_NU-1) * (SIZE_MU-1) * sizeof(float));
-    cudaMalloc((void **)&data.H_mu, (SIZE_NU-1) * SIZE_MU * sizeof(float));
+    _(cudaMalloc((void **)&data.E_nu, (SIZE_NU-1) * SIZE_MU * sizeof(float)));
+    _(cudaMalloc((void **)&data.E_phi, SIZE_NU * SIZE_MU * sizeof(float)));
+    _(cudaMalloc((void **)&data.H_nu, SIZE_NU * (SIZE_MU-1) * sizeof(float)));
+    _(cudaMalloc((void **)&data.H_phi,
+                 (SIZE_NU-1) * (SIZE_MU-1) * sizeof(float)));
+    _(cudaMalloc((void **)&data.H_mu, (SIZE_NU-1) * SIZE_MU * sizeof(float)));
     
     std::cout<<"Allocated memory for device field matrices\n";
     
     // Copy host matrices to device in order to set zero
-    cudaMemcpy(data.E_nu, E_nu, (SIZE_NU-1) * SIZE_MU * sizeof(float),
-               cudaMemcpyHostToDevice);
-    cudaMemcpy(data.E_phi, E_phi, SIZE_NU * SIZE_MU * sizeof(float),
-               cudaMemcpyHostToDevice);
-    cudaMemcpy(data.H_nu, H_nu, SIZE_NU * (SIZE_MU-1) * sizeof(float),
-               cudaMemcpyHostToDevice);
-    cudaMemcpy(data.H_phi, H_phi, (SIZE_NU-1) * (SIZE_MU-1) * sizeof(float),
-               cudaMemcpyHostToDevice);
-    cudaMemcpy(data.H_mu, H_mu, SIZE_NU * (SIZE_MU-1) * sizeof(float),
-               cudaMemcpyHostToDevice);
+    _(cudaMemcpy(data.E_nu, E_nu, (SIZE_NU-1) * SIZE_MU * sizeof(float),
+                 cudaMemcpyHostToDevice));
+    _(cudaMemcpy(data.E_phi, E_phi, SIZE_NU * SIZE_MU * sizeof(float),
+                 cudaMemcpyHostToDevice));
+    _(cudaMemcpy(data.H_nu, H_nu, SIZE_NU * (SIZE_MU-1) * sizeof(float),
+                 cudaMemcpyHostToDevice));
+    _(cudaMemcpy(data.H_phi, H_phi, (SIZE_NU-1) * (SIZE_MU-1) * sizeof(float),
+                 cudaMemcpyHostToDevice));
+    _(cudaMemcpy(data.H_mu, H_mu, SIZE_NU * (SIZE_MU-1) * sizeof(float),
+                 cudaMemcpyHostToDevice));
     
     std::cout<<"Done setting zero to device field matrices\n";
     
     // Copy pointers to device
     // One-time minor expense for increased ease of access...
-    cudaMalloc((void **)&data.d, sizeof(struct Data));
-    cudaMemcpy(data.d, &data, sizeof(data), cudaMemcpyHostToDevice);
+    _(cudaMalloc((void **)&data.d, sizeof(struct Data)));
+    _(cudaMemcpy(data.d, &data, sizeof(data), cudaMemcpyHostToDevice));
     
     // Start stepping to update E and H
     /* Note: Maybe we should compute the h-matrices also every single time. In
@@ -345,8 +355,8 @@ int main(int argc, char **argv)
     // Each update equation occurs as a separate kernel
     int t = 0;
     cudaStream_t stream2, stream3;
-    cudaStreamCreate(&stream2);
-    cudaStreamCreate(&stream3);
+    _(cudaStreamCreate(&stream2));
+    _(cudaStreamCreate(&stream3));
     
     std::cout<<"Starting time stepping...\n";
     
@@ -362,11 +372,11 @@ int main(int argc, char **argv)
         update_E_nu<<<blocks, threads, 0, stream1>>>(data.d);
         // E_phi should wait for both streams 2 and 3. We wait only for 3 since
         // it will be forced to wait for 2 if it is to run on 2.
-        cudaStreamSynchronize(stream3);
+        _(cudaStreamSynchronize(stream3));
         update_E_phi<<<blocks, threads, 0, stream2>>>(data.d, t);
         
         // Make host wait until all updates are complete
-        cudaDeviceSynchronize();
+        _(cudaDeviceSynchronize());
         
         // This promises to be deadly slow. We'll need to figure out some
         // intelligent way of running this asynchronously. Lower frequency
@@ -376,8 +386,8 @@ int main(int argc, char **argv)
         if(t % 1 == 0) {
             // Fetch from GPU
             // This memcpy _should_ be synchronous...
-            cudaMemcpy(E_phi, data.E_phi, SIZE_NU * SIZE_MU * sizeof(float), 
-                       cudaMemcpyDeviceToHost);
+            _(cudaMemcpy(E_phi, data.E_phi, SIZE_NU * SIZE_MU * sizeof(float), 
+                         cudaMemcpyDeviceToHost));
             
             // Write into file
             std::fstream f;
@@ -400,10 +410,10 @@ int main(int argc, char **argv)
     std::cout<<"All done\n";
     
     // Clean up
-    cudaStreamDestroy(stream1);
-    cudaStreamDestroy(stream2);
-    cudaStreamDestroy(stream3);
-    cudaDeviceReset();
+    _(cudaStreamDestroy(stream1));
+    _(cudaStreamDestroy(stream2));
+    _(cudaStreamDestroy(stream3));
+    _(cudaDeviceReset());
     return 0;
 }
 
