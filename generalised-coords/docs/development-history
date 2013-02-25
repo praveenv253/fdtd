@@ -1,0 +1,48 @@
+Code development history (compiled logs)
+========================
+
+Tuesday | 05 Feb 2013 | 23:04:19 | GMT+0530
+
+(Excerpt of mail to HSR)
+
+Memory errors and debugging
+---------------------------
+
+First and foremost, memory errors are vicious and will prevent you from using gdb and profiling.
+cuda-memcheck is a really good utility that figures out all the memory errors that occur.
+This is especially vital if you don't use protection mechanisms to detect the error returned by many of the functions.
+But even if you do, it proves very useful in finding faults in indexing - 2D arrays tend to be particularly prone to indexing errors because indices are of the form A[rows * COL_WIDTH + cols], and in my case, I was using the wrong column width in multiple places.
+
+Profiling results
+-----------------
+
+The Nvidia Visual Profiler is a beautiful piece of software, which tells you pretty much everything you need to know, but I was interested only in the time taken by each function.
+I was working with a relatively small test matrix, whose size was 128x128. The code I was profiling was the largely un-optimized bare-bones version of the dipole simulation. At the time I profiled it, the code was working on non-zero matrices. The answer it was producing was not right, but it was definitely spending time doing multiplications.
+For such a matrix, it turns out that each of the update equations take around 200-500us, whereas copying the matrix of interest back to the CPU memory takes only about 12-13us. In other words, the memory copy time is practically negligible. This ratio will probably change as the problem scales, and I should have collected data for a slightly bigger array then, but I didn't think about it.
+Predictably, the main place where a lot of time is lost is in copying the matrix of interest to disk, say for plotting it later. This also got indirectly timed by the visual profiler, because it happened to be sandwiched between two kernel functions, both of which had start and end times recorded. Copying a 128x128 4-byte per element array takes 45ms on average.
+I don't know currently whether there is any way to figure out what part of this 45ms corresponds to seek time and latency time, and how much of it is actually taken to write to disk. I think only the last component scales.
+In any case, this value puts an upper bound on how frequently we can write to disk without keeping the GPU waiting. For this simplistic case, if we add up the times taken by all update equations, it comes to around 1ms. Therefore, if we want to keep the GPU busy while writing to disk in parallel, we can sample the simulation only once every 45 time steps. This number is likely to get worse as the code gets optimized.
+
+My latest debugging attempt, beginning of last week
+---------------------------------------------------
+
+cuda-gdb tends to give very poor error codes. All it keeps telling me is that the function exited with error code 0x8, which is less than helpful, to say the least.
+Finding the appropriate CUDA document to look in, in order to find what this error code means can also turn out to be a nightmare, because they don't do "man pages". Perhaps I'll spend some time documenting the cuda documents for future reference.
+As it turns out, the correct document for this kind of information is the cuda-toolkit document, which has a detailed description of each and every function in the cuda toolkit, including the errors they return. 0x8 means that it encountered a function which does not exist, or is compiled for the wrong architecture.
+I had been using a power function, which I recalled from elsewhere had been introduced into the toolkit only recently. So I went around trying to compile things for a more recent architecture.
+Now, I'd been compiling with the flags that explicitly set the architecture to 2.0. As it turns out, the GPU we have has a compute capability of 2.1. So I tried making things 2.1 where possible. As it turns out, this also fails because they have a "virtual architecture" and a "GPU architecture". For "virtual", you have to use 2.0 as 2.1 doesn't exist.
+But even then, it doesn't work right. Removing the particular compile flag altogether yields a totally different error in GDB, one which is even more cryptic than the last. Surprisingly, google has not proven too helpful, although more searching may help - the ideal combination of keywords is always hard to find.
+After some more such trial-and-error attempts, I gave up trying to figure out what gdb is trying to tell me.
+
+Some thoughts on optimization
+-----------------------------
+
+I recall that you'd suggested using constant memory for the coordinate-dependent scale factors, i.e., the h-matrices. Unfortunately, there is a grand total of 64KiB of constant memory available. I calculated that this will hold only one 73x73 4-bytes-per-element matrix, which is completely insufficient.
+The next best thing, of course, is shared memory. The main advantage to this is that multiple reads are much faster. But if we look at each update equation, there doesn't appear to be much repetition in data usage. Every element of E or H is used only once. The same can mostly be said of the h-matrices, save for cases where averages have to be performed, and therefore adjacent threads will pick up the same element - this is only a 2-fold usage.
+The other option is to just calculate the h-matrices every single time - for each and every update. The calculations involved are somewhat complex, but from what I've read, GPU memory accesses can take up to 500 GPU clock cycles. It just might be the case that the calculations take less time.
+Another thing to consider is that later on, we'll also be having epsilon, mu and sigma matrices. These have to be fetched from memory. Possible schemes may include having half the threads in a block fetch data from memory to shared memory, while having the other half compute the required h-values, and storing that also in shared memory.
+But I think that before we do all this, we should figure out what the desired "frame rate" is. I don't see the point of optimizing the code much if GPU-usage will anyway be constrained by disk-writes.
+Lastly, Bharath pointed me to the cuda thrust API. These have optimized vector operations, which include transform operations such as adjacent difference. If we could leverage this, it might prove faster than what I can achieve in a matter of a few months. I don't know whether Bharath is planning to use it as a part of his project. If he is, then I can borrow the relevant code fragments. Possibly, this also gives us a simpler way to write the code, and makes debugging easier to the extent that we don't need to be worried that the library functions themselves are wrong. Perhaps once I get the current program working, I can try writing this in order to see how much faster/slower it is.
+
+
+In continuing with the debugging attempts, I think I shall just dump all the matrices one by one onto standard output and take a close look at them. I was loth to doing this, simply because transferring matrices from cuda memory to cpu memory and then printing them out and going through them is a painstaking task. But it looks like I have no alternative. Hopefully by going in order of execution and comparing with expected results (I have my python code for reference), I should be able to get somewhere.
