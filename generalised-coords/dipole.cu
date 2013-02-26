@@ -4,8 +4,8 @@
 #include <iostream>
 #include <fstream>
 
-#define Sc_nu 0.1f
-#define Sc_mu 0.1f
+#define Sc_nu 0.2f
+#define Sc_mu 0.2f
 #define imp0 377.0f
 #define EPSILON_R 1
 #define MU_R 1
@@ -28,7 +28,7 @@ const float NU_MIN = NU_MAX / SIZE_NU;
 const float MU_MAX = 1.0;
 const float MU_MIN = MU_MAX / SIZE_MU;
 const int MAXTIME = 100;
-const int SOURCE_LOCATION = (SIZE_NU/2) * SIZE_MU + (SIZE_MU/3);
+const int SOURCE_LOCATION = 55 * SIZE_MU + 55;
 const int RI = 1;
 
 // Define structure to be passed to kernel
