@@ -28,7 +28,7 @@ const float NU_MIN = NU_MAX / SIZE_NU;
 const float MU_MAX = 1.0;
 const float MU_MIN = MU_MAX / SIZE_MU;
 const int MAXTIME = 100;
-const int SOURCE_LOCATION = 55 * SIZE_MU + 55;
+const int SOURCE_LOCATION = 50 * SIZE_MU + 50;
 const int RI = 1;
 
 // Define structure to be passed to kernel
@@ -268,7 +268,7 @@ update_E_phi(struct Data *d, int t) {
 
     // Needs definition of SOURCE_LOCATION
     if(index == SOURCE_LOCATION)
-        E_phi[index] = __expf(-(t-30) * (t-30) / 100.0);
+        (*E_phi) = __expf(-(t-30) * (t-30) / 100.0);
 }
 
 int main(int argc, char **argv)
@@ -305,6 +305,48 @@ int main(int argc, char **argv)
                                                data.r, data.sin_theta);
     
     std::cout<<"Done computing h matrices\n";
+
+
+            float h_nu[SIZE_NU][SIZE_MU];
+
+            _(cudaMemcpy(h_nu, data.h_nu, SIZE_NU * SIZE_MU * sizeof(float),
+                         cudaMemcpyDeviceToHost));
+            // Write into file
+            std::fstream z;
+            char filename[50];
+            sprintf(filename, "output/dipole/h-nu.txt");
+            z.open(filename, std::fstream::out);
+            for(int i=0 ; i < SIZE_NU ; i++) {
+                for(int j=0 ; j < SIZE_MU ; j++ ) {
+                    z<<h_nu[i][j]<<" ";
+                }
+                z<<std::endl;
+            }
+            z.close();
+
+            _(cudaMemcpy(h_nu, data.h_phi, SIZE_NU * SIZE_MU * sizeof(float),
+                         cudaMemcpyDeviceToHost));
+            sprintf(filename, "output/dipole/h-phi.txt");
+            z.open(filename, std::fstream::out);
+            for(int i=0 ; i < SIZE_NU ; i++) {
+                for(int j=0 ; j < SIZE_MU ; j++ ) {
+                    z<<h_nu[i][j]<<" ";
+                }
+                z<<std::endl;
+            }
+            z.close();
+
+            _(cudaMemcpy(h_nu, data.h_mu, SIZE_NU * SIZE_MU * sizeof(float),
+                         cudaMemcpyDeviceToHost));
+            sprintf(filename, "output/dipole/h-mu.txt");
+            z.open(filename, std::fstream::out);
+            for(int i=0 ; i < SIZE_NU ; i++) {
+                for(int j=0 ; j < SIZE_MU ; j++ ) {
+                    z<<h_nu[i][j]<<" ";
+                }
+                z<<std::endl;
+            }
+            z.close();
 
     // Declare host versions of E and H matrices
     // Might want to use HostAlloc later on so that copying to this can be made
@@ -390,17 +432,22 @@ int main(int argc, char **argv)
                          cudaMemcpyDeviceToHost));
             
             // Write into file
-            std::fstream f;
+            std::fstream f, e;
             char filename[50];
             sprintf(filename, "output/dipole/time-step-%d.txt", t);
             f.open(filename, std::fstream::out);
+            sprintf(filename, "output/dipole/E-phi-%d.txt", t);
+            e.open(filename, std::fstream::out);
             f<<SIZE_NU<<std::endl<<SIZE_MU<<std::endl;
             for(int i=0 ; i < SIZE_NU ; i++) {
                 for(int j=0 ; j < SIZE_MU ; j++ ) {
+                    e<<E_phi[i][j]<<" ";
                     f<<E_phi[i][j]<<std::endl;
                 }
+                e<<std::endl;
             }
             f.close();
+            e.close();
         }
         
         // Increment time step
