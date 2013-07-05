@@ -104,6 +104,10 @@ h_nu = (r ** 2) / (RI * sin_theta * delta)
 h_phi = r * sin_theta
 h_mu = (r ** 3) / (RI * RI * delta)
 
+sp.savetxt('h-nu-python.txt', h_nu)
+sp.savetxt('h-phu-python.txt', h_phi)
+sp.savetxt('h-mu-python.txt', h_mu)
+
 ## Coefficients for update equations ##
 
 # In this section, the notation cA_i_B_j is used to mean the coefficient of the
@@ -217,8 +221,9 @@ for t in range(MAXTIME):
     
     ## Plotting ##
     
-    if t % 5 == 0:
-        pl.contour(gridy, gridx, E_phi, 100)
+    if t % 1 == 0:
+        #pl.contour(gridy, gridx, E_phi, 100)
         #pl.pcolor(E_phi)
-        pl.draw()
-        pl.clf()
+        #pl.draw()
+        #pl.clf()
+        sp.savetxt('output/E_phi-%d.txt' % t, E_phi)
